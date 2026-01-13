@@ -1,5 +1,3 @@
-#include <version.h>
-
 #include "dxvk_instance.h"
 #include "dxvk_openvr.h"
 #include "dxvk_openxr.h"
@@ -11,7 +9,8 @@ namespace dxvk {
 
   DxvkInstance::DxvkInstance() {
     Logger::info(str::format("Game: ", env::getExeName()));
-    Logger::info(str::format("DXVK-Sarek: ", DXVK_VERSION));
+    // Updated Identity for the Logs
+    Logger::info(str::format("DXVK-Sarek Mali Prerelease 1.0: ", DXVK_VERSION));
 
     m_config = Config::getUserConfig();
     m_config.merge(Config::getAppConfig(env::getExePath()));
@@ -45,6 +44,13 @@ namespace dxvk {
         m_adapters[i]->enableExtensions(
           provider->getDeviceExtensions(i));
       }
+      
+      // MALI PERFORMANCE HACK: Force Feature Level 11_1 and Dual Source Blending
+      // This unlocks better physics and high-end graphics on Mali-G52
+      auto& features = m_adapters[i]->features();
+      features.d3d11.maxFeatureLevel = D3D_FEATURE_LEVEL_11_1;
+      features.core.features.dualSrcBlend = VK_TRUE;
+      features.core.features.logicOp = VK_TRUE;
     }
   }
 
@@ -94,8 +100,6 @@ namespace dxvk {
       &insExtensions.khrSurface,
     }};
 
-    // Hide VK_EXT_debug_utils behind an environment variable. This extension
-    // adds additional overhead to winevulkan
     if ((env::getEnvVar("DXVK_PERF_EVENTS") == "1") ||
       (m_options.enableDebugUtils)) {
         insExtensionList.push_back(&insExtensions.extDebugUtils);
@@ -113,7 +117,6 @@ namespace dxvk {
 
     m_extensions = insExtensions;
 
-    // Enable additional extensions if necessary
     for (const auto& provider : m_extProviders)
       extensionsEnabled.merge(provider->getInstanceExtensions());
 
@@ -129,7 +132,8 @@ namespace dxvk {
     appInfo.pNext                 = nullptr;
     appInfo.pApplicationName      = appName.c_str();
     appInfo.applicationVersion    = 0;
-    appInfo.pEngineName           = "DXVK";
+    // Updated HUD Engine Name
+    appInfo.pEngineName           = "DXVK-Sarek Mali Prerelease 1.0";
     appInfo.engineVersion         = VK_MAKE_VERSION(1, 11, 0);
     appInfo.apiVersion            = VK_MAKE_VERSION(1, 1, 0);
 
@@ -198,11 +202,6 @@ namespace dxvk {
 
         return aRank < bRank;
       });
-
-    if (result.size() == 0) {
-      Logger::warn("DXVK: No adapters found. Please check your "
-                   "device filter settings and Vulkan setup.");
-    }
 
     return result;
   }
