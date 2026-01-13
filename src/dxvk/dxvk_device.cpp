@@ -31,10 +31,6 @@ namespace dxvk {
     m_features.core.features.dualSrcBlend = VK_TRUE;
     m_features.core.features.logicOp = VK_TRUE;
     
-    // 4. Memory Optimization: Prioritize Integrated Paths
-    // Mali-G52 MC2 has limited bandwidth; we set a threshold to favor local system RAM
-    m_objects.memoryManager().setDeviceLocalThreshold(0.5f); 
-
     // 5. Descriptor Hack: Limit pool size to prevent Mali driver overhead (CPU stutters)
     m_properties.core.properties.limits.maxBoundDescriptorSets = 4;
 
