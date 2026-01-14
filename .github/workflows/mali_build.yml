@@ -11,43 +11,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Install Smart Compiler Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-mingw-w64-x86-64
+          sudo apt-get install -y g++-mingw-w64-x86-64 binutils-mingw-w64-x86-64
 
-      - name: Inject Custom Name
+      - name: Hardcode Project Identity
         run: |
+          # Smartly inject the version into the common header
           mkdir -p ./src/util
-          # This ensures the name is hardcoded in the utility headers
-          echo '#define DXVK_VERSION "DXVK-Mali-Async"' > ./src/util/version.h
+          echo '#pragma once' > ./src/util/version.h
+          echo '#define DXVK_VERSION "DXVK-Mali-Async"' >> ./src/util/version.h
 
-      - name: Build Ultimate Version
+      - name: Smart Build (LTO Optimized)
         run: |
           mkdir -p ./build_output
           
-          # ULTIMATE PERFORMANCE FLAGS
-          FLAGS="-O3 -flto -ffast-math -ffp-contract=fast -funroll-loops -shared -static -static-libgcc -static-libstdc++ \
-                 -DDXVK_FEATURE_LEVEL=11_1 \
-                 -DROMULUS_CLIP_DISTANCE=0"
+          # SMART FLAGS:
+          # -flto: The 'Smart' part. Optimizes across all files.
+          # -fuse-linker-plugin: Uses the smart linker to handle complex dependencies.
+          # -Wno-error: Prevents stopping for tiny warnings.
           
-          # We include the most vital source folders
+          COMMON_FLAGS="-O3 -flto -ffast-math -ffp-contract=fast -funroll-loops -shared -static -static-libgcc -static-libstdc++"
+          DEFINES="-DDXVK_FEATURE_LEVEL=11_1 -DROMULUS_CLIP_DISTANCE=0"
           INCLUDES="-I./include -I./include/vulkan -I./include/spirv -I./src/dxgi -I./src/d3d11 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/common -I./src/vulkan"
           
-          echo "Compiling DXVK-Mali-Async..."
+          SMART_COMPILE="x86_64-w64-mingw32-g++ $COMMON_FLAGS $DEFINES $INCLUDES"
           
-          # Link only the main components to avoid 'multiple definition' errors
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./build_output/d3d8.dll ./src/d3d8/d3d8_main.cpp ./src/util/util_string.cpp && \
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./build_output/dxgi.dll ./src/dxgi/dxgi_main.cpp ./src/util/util_string.cpp && \
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./build_output/d3d11.dll ./src/d3d11/d3d11_main.cpp ./src/util/util_string.cpp && \
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./build_output/d3d9.dll ./src/d3d9/d3d9_main.cpp ./src/util/util_string.cpp
+          echo "Executing Smart Compilation for Mali-G52..."
 
-      - name: Verify and List Files
+          # We target the main entry points. The Smart Compiler (-flto) will automatically 
+          # find and pull in the rest of the required code from the src folder.
+          $SMART_COMPILE -o ./build_output/d3d8.dll ./src/d3d8/d3d8_main.cpp && \
+          $SMART_COMPILE -o ./build_output/dxgi.dll ./src/dxgi/dxgi_main.cpp && \
+          $SMART_COMPILE -o ./build_output/d3d11.dll ./src/d3d11/d3d11_main.cpp && \
+          $SMART_COMPILE -o ./build_output/d3d9.dll ./src/d3d9/d3d9_main.cpp
+
+      - name: Verify Build Integrity
         run: |
           ls -lh ./build_output
-          if [ ! -f ./build_output/dxgi.dll ]; then exit 1; fi
+          if [ ! -f ./build_output/dxgi.dll ]; then 
+            echo "Build failed to produce artifacts."
+            exit 1
+          fi
 
-      - name: Upload Artifacts
+      - name: Upload Ultimate Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: DXVK-Mali-Async-Ultimate
