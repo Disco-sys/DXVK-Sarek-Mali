@@ -1,4 +1,4 @@
-name: DXVK-Mali-G52-Ultimate-Fast
+name: DXVK-Mali-Dual-Build
 on:
   push:
     branches: [main]
@@ -10,43 +10,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Fast Compiler (Clang & LLD)
+      - name: Build Custom Mali 1.11.0
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld llvm mingw-w64 patch
-
-      - name: Apply GPL-Async Patch
-        run: |
+          sudo apt-get install -y g++-mingw-w64-x86-64 patch
+          
+          # Apply GPL-Async Patch
           curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
           patch -p1 < gpl.patch || echo "Patch applied"
 
-      - name: Fast Build (Clang + LLD)
-        run: |
-          mkdir -p ./build_output
-          
-          # TURBO & FAST LINK FLAGS
-          # -fuse-ld=lld: Uses the super-fast linker
-          # -target: Tells Clang to cross-compile for Windows
-          FLAGS="-O3 -flto -ffast-math -fuse-ld=lld -shared -static -Wl,--subsystem,windows -target x86_64-w64-mingw32 \
-                 -DDXVK_VERSION=\"DXVK-Mali-GPL-Async\" \
-                 -DDXVK_FEATURE_LEVEL=11_1 \
-                 -DROMULUS_CLIP_DISTANCE=0 \
-                 -DXVK_GPL_ASYNC=1"
-          
-          # All paths the compiler needs to check
+          # Performance & GPL/Async Flags (Mali-G52 specific)
+          FLAGS="-O3 -flto -ffast-math -shared -static -static-libgcc -static-libstdc++ -w \
+                 -DROMULUS_CLIP_DISTANCE=0 -DXVK_GPL_ASYNC=1"
           INCLUDES="-I./include -I./include/vulkan -I./src/dxgi -I./src/d3d11 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/common -I./src/vulkan"
           
-          echo "Fast Compiling Core Engine..."
-          clang++ $FLAGS $INCLUDES -c ./src/util/*.cpp ./src/vulkan/*.cpp ./src/common/*.cpp
+          mkdir -p ./ultimate_pack/"Dxvk mali 1.11.0"
           
-          echo "Fast Linking DLLs..."
-          clang++ $FLAGS $INCLUDES *.o ./src/d3d8/d3d8_main.cpp -o ./build_output/d3d8.dll
-          clang++ $FLAGS $INCLUDES *.o ./src/dxgi/dxgi_main.cpp -o ./build_output/dxgi.dll
-          clang++ $FLAGS $INCLUDES *.o ./src/d3d11/d3d11_main.cpp ./src/dxvk/*.cpp -o ./build_output/d3d11.dll
-          clang++ $FLAGS $INCLUDES *.o ./src/d3d9/d3d9_main.cpp -o ./build_output/d3d9.dll
+          # Find all necessary source files
+          CORE=$(find ./src/util ./src/vulkan ./src/common -name "*.cpp")
+          DXVK=$(find ./src/dxvk -name "*.cpp")
+
+          # Compile 1.11.0 DLLs
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./ultimate_pack/"Dxvk mali 1.11.0"/d3d11.dll ./src/d3d11/d3d11_main.cpp $DXVK $CORE
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./ultimate_pack/"Dxvk mali 1.11.0"/d3d9.dll ./src/d3d9/d3d9_main.cpp $CORE
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./ultimate_pack/"Dxvk mali 1.11.0"/dxgi.dll ./src/dxgi/dxgi_main.cpp $CORE
+
+      - name: Prepare Legacy 1.10.3 Async
+        run: |
+          mkdir -p ./ultimate_pack/"1.10.3"
+          curl -L https://github.com/Sporif/dxvk-async/releases/download/1.10.3/dxvk-async-1.10.3.tar.gz -o 1103.tar.gz
+          tar -xf 1103.tar.gz
+          cp dxvk-async-1.10.3/x64/*.dll ./ultimate_pack/"1.10.3"/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DXVK-Mali-GPL-Async-Fast
-          path: ./build_output/
+          name: DXVK-Mali-Universal-Package
+          path: ./ultimate_pack/
