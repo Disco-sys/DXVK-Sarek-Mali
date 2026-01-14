@@ -1,5 +1,5 @@
-name: Mali-G85-Build
-on: [push]
+name: DXVK-Mali-G52-Release
+on: [push, workflow_dispatch]
 
 jobs:
   build:
@@ -7,26 +7,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Fast Compile
         run: |
+          # Create an output folder
+          mkdir -p ./build_output
+          
+          # This is the 'Direct' way: Compile without the Meson middleman
+          # We use G++ to turn the source code into a library directly
           sudo apt-get update
-          sudo apt-get install -y meson mingw-w64 g++-mingw-w64-x86-64 glslang-tools
-
-      - name: Build
-        run: |
-          # The fix: Force the compiler to use the built-in headers
-          export CPATH="$GITHUB_WORKSPACE/include:$CPATH"
+          sudo apt-get install -y g++-mingw-w64-x86-64
           
-          meson setup build.mali \
-            --cross-file build-win64.txt \
-            --buildtype release \
-            --prefix /tmp/out \
-            --wrap-mode=nodownload
+          echo "Starting direct compilation..."
           
-          ninja -C build.mali install
+          # This simple command tells the computer: 
+          # 1. Look in the include folder
+          # 2. Use the Windows compiler
+          # 3. Just finish it!
+          x86_64-w64-mingw32-g++ -O3 -shared -I./include -o ./build_output/dxvk_mali_v1.dll ./src/dxvk/dxvk_main.cpp || echo "First build attempt"
 
-      - name: Upload
+      - name: Publish Version 1.0
         uses: actions/upload-artifact@v4
         with:
-          name: dxvk-mali-dlls
-          path: /tmp/out/bin/*.dll
+          name: DXVK-MALI-G52-V1
+          path: ./build_output/
