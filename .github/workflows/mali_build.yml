@@ -14,8 +14,9 @@ jobs:
 
       - name: Build
         run: |
-          # We removed the "tests" option that caused the error
-          # We use --wrap-mode to ensure it uses the headers included in the code
+          # The fix: Force the compiler to use the built-in headers
+          export CPATH="$GITHUB_WORKSPACE/include:$CPATH"
+          
           meson setup build.mali \
             --cross-file build-win64.txt \
             --buildtype release \
