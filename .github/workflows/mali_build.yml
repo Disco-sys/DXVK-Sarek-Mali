@@ -1,58 +1,73 @@
-name: Universal-Mali-Legacy-Direct-Build
+name: Universal-Mali-Combined-Build
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 jobs:
-  build_legacy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # 1. INSTALL NECESSARY TOOLS (Default Compiler v10+)
-      - name: Install Default Compiler
+      # 1. SETUP: Install Tools & Force POSIX Threading
+      - name: Setup Compiler & POSIX
         run: |
           sudo apt-get update
-          # This installs GCC 12/13 (well above your v10 requirement)
-          sudo apt-get install -y g++-mingw-w64-x86-64 libvulkan-dev zstd patch
+          sudo apt-get install -y g++-mingw-w64-x86-64 patch zstd libvulkan-dev
           
-          # Force POSIX (The "Early Days" standard for DXVK)
+          # This ensures GCC v10+ features like std::mutex work
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
-      # 2. COMPILE DIRECTLY (The "New Fork" Style)
-      - name: Manual Compilation
+      # 2. EXECUTE: Patch, Fake Header, and Compile
+      - name: Execute Universal Mali Build
         run: |
           mkdir -p ./build_output/x64
-          
-          # Flags used by early performance forks
-          FLAGS="-O3 -march=x86-64 -msse -msse2 -mfpmath=sse -shared -static -static-libgcc -static-libstdc++ -w"
-          # Mali-Specific environment optimizations
+          mkdir -p ./pack_1103/x64
+
+          # Create the missing version header manually (Stops the fatal error)
+          mkdir -p ./src/dxvk
+          echo '#define DXVK_VERSION "1.11.0-Mali-Universal"' > ./src/dxvk/dxvk_version.h
+
+          # Apply Sarek GPL-Async Patch
+          curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
+          patch -p1 < gpl.patch || echo "Patch applied"
+
+          # Compiler settings for Mali-G52 performance
+          FLAGS="-O3 -march=x86-64 -shared -static -static-libgcc -static-libstdc++ -w"
           OPTS="-DROMULUS_CLIP_DISTANCE=0 -DXVK_GPL_ASYNC=1"
           
-          # Include all source directories manually to avoid 'missing header' errors
-          INCLUDES=$(find ./src -type d | sed 's/^/-I /' | tr '\n' ' ')
-          CORE_FILES=$(find ./src/util ./src/vulkan ./src/dxvk -name "*.cpp")
+          # Recursive include discovery (Finds all hidden headers)
+          ALL_PATHS=$(find ./src -type d | sed 's/^/-I /' | tr '\n' ' ')
+          INCLUDES="-I/usr/include -I./include -I./include/vulkan $ALL_PATHS"
+          
+          # Find core engine code
+          CORE_ENGINE=$(find ./src/util ./src/vulkan ./src/dxvk -name "*.cpp")
 
-          # Loop through each component to build DLLs
-          for part in dxgi d3d11 d3d10core d3d9 d3d8; do
-            if [ -d "./src/$part" ]; then
-              echo "Direct Compiling $part.dll..."
-              x86_64-w64-mingw32-g++ $FLAGS $OPTS -I/usr/include -I./include $INCLUDES \
-              -o ./build_output/x64/$part.dll $(find ./src/$part -name "*.cpp") $CORE_FILES
+          # Compile DLLs one by one
+          for dll in dxgi d3d11 d3d10core d3d9 d3d8; do
+            if [ -d "./src/$dll" ]; then
+              echo "Compiling $dll.dll..."
+              x86_64-w64-mingw32-g++ $FLAGS $OPTS $INCLUDES -o ./build_output/x64/$dll.dll $(find ./src/$dll -name "*.cpp") $CORE_ENGINE
             fi
           done
 
-      # 3. GENERATE LUDASHI PROFILE
-      - name: Create WCP Package
-        run: |
-          echo '{"name":"DXVK Mali 1.11.0","version":"1.11.0","description":"Universal Mali build using Legacy Direct-Compile.","type":"DXVK"}' > ./build_output/profile.json
-          cd build_output
-          tar -I zstd -cf ../Universal_Mali_DXVK.wcp ./*
+          # 3. PACKAGE: Create Ludashi .wcp files
+          echo '{"name":"DXVK Mali 1.11.0","version":"1.11.0","author":"Disco-sys","description":"Universal Mali build.","type":"DXVK"}' > ./build_output/profile.json
+          
+          # Pull 1.10.3 Legacy fallback
+          curl -L https://github.com/Sporif/dxvk-async/releases/download/1.10.3/dxvk-async-1.10.3.tar.gz -o 1103.tar.gz
+          tar -xf 1103.tar.gz
+          cp dxvk-async-1.10.3/x64/*.dll ./pack_1103/x64/
+          echo '{"name":"DXVK-Mali 1.10.3","version":"1.10.3","author":"Disco-sys","description":"Legacy fallback.","type":"DXVK"}' > ./pack_1103/profile.json
 
-      - name: Upload
+          # Compress into WCP
+          cd build_output && tar -I zstd -cf ../DXVK-Mali-1.11.0.wcp ./* && cd ..
+          cd pack_1103 && tar -I zstd -cf ../DXVK-Mali-1.10.3.wcp ./* && cd ..
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Universal-Mali-Build
+          name: Universal-Mali-Pack
           path: ./*.wcp
