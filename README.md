@@ -32,4 +32,4 @@ for best results in Mali, use winlator Ludashi for more performace, for more min
 
 
 this is still on its wip or pre release stage. i made this repo to add more performance things. especially on Mali devices.
-this is the most important part, i recommend using Ludashi as your Winlator fork. it has a fast/compatible with mali version of wrapper.  your performance will vary depending by ur phone specs. also as ludashi updates it keeps the wrapper deiver up to date too.
+this is the most important part, i recommend using Ludashi as your Winlator fork. it has a fast/compatible with mali version of wrapper.  your performance will vary depending by ur phone specs. also as ludashi updates it keeps the wrapper up to date too.
