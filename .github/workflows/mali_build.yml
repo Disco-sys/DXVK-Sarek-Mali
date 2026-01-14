@@ -10,12 +10,19 @@ jobs:
       - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson mingw-w64 g++-mingw-w64-x86-64 glslang-tools libvulkan-dev
+          sudo apt-get install -y meson mingw-w64 g++-mingw-w64-x86-64 glslang-tools
 
       - name: Build
         run: |
-          # Bypassing the headers error by using the standard dev-library
-          meson setup --cross-file build-win64.txt --buildtype release --prefix /tmp/out build.mali
+          # We use --wrap-mode=nodownload to force it to use internal headers
+          # And we point it to the cross-file which handles the paths
+          meson setup build.mali \
+            --cross-file build-win64.txt \
+            --buildtype release \
+            --prefix /tmp/out \
+            -Dstrip=true \
+            -Dtests=false
+          
           ninja -C build.mali install
 
       - name: Upload
