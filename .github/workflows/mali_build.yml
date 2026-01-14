@@ -10,44 +10,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Build Tools
+      - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson mingw-w64 g++-mingw-w64-x86-64 patch python3-pip
-          pip3 install mako
+          sudo apt-get install -y g++-mingw-w64-x86-64 patch
 
       - name: Apply GPL-Async Patch
         run: |
-          # Pulling the high-performance Async code for 2.7.1/Sarek base
+          # Downloading and applying the Async code directly to your files
           curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
-          patch -p1 < gpl.patch || echo "Patch applied with offsets (Normal for Sarek)"
+          patch -p1 < gpl.patch || echo "Patch applied"
 
-      - name: Configure Turbo Build
-        run: |
-          # Injecting Mali-G52 Performance Flags & Black Screen Fix
-          export CXXFLAGS="-O3 -ffast-math -flto -DROMULUS_CLIP_DISTANCE=0"
-          meson setup build \
-            --cross-file build-win64.txt \
-            --buildtype release \
-            --prefix /usr \
-            -Dstrip=true \
-            -Ddxvk_version="DXVK-Mali-GPL-Async" \
-            -Denable_tests=false
-
-      - name: Compile Ultimate DLLs
-        run: |
-          cd build
-          ninja -j$(nproc)
-
-      - name: Package & Verify
+      - name: Build Ultimate DLLs
         run: |
           mkdir -p ./build_output
-          cp build/src/dxgi/dxgi.dll ./build_output/
-          cp build/src/d3d11/d3d11.dll ./build_output/
-          cp build/src/d3d9/d3d9.dll ./build_output/
-          cp build/src/d3d8/d3d8.dll ./build_output/
-          echo "Build Complete. DLLs generated:"
-          ls -lh ./build_output
+          
+          # SMART FLAGS
+          # -O3 & -ffast-math: Speed
+          # -DROMULUS_CLIP_DISTANCE=0: Fixes Black Screen
+          # -DXVK_GPL_ASYNC=1: Enables the code we just patched in
+          FLAGS="-O3 -flto -ffast-math -shared -static -static-libgcc -static-libstdc++ -w \
+                 -DDXVK_VERSION=\"DXVK-Mali-GPL-Async\" \
+                 -DDXVK_FEATURE_LEVEL=11_1 \
+                 -DROMULUS_CLIP_DISTANCE=0 \
+                 -DXVK_GPL_ASYNC=1"
+          
+          INCLUDES="-I./include -I./include/vulkan -I./include/spirv -I./src/dxgi -I./src/d3d11 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/common -I./src/vulkan"
+          
+          # THE SMART LINK: We compile the logic parts into 'objects' so they don't conflict
+          echo "Compiling Core Engine..."
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -c ./src/util/*.cpp ./src/vulkan/*.cpp
+          
+          echo "Building DLLs..."
+          # Now we link the main DLL files with the objects we just made
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/d3d8/d3d8_main.cpp -o ./build_output/d3d8.dll
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/dxgi/dxgi_main.cpp -o ./build_output/dxgi.dll
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/d3d11/d3d11_main.cpp ./src/dxvk/*.cpp -o ./build_output/d3d11.dll
+          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/d3d9/d3d9_main.cpp -o ./build_output/d3d9.dll
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
