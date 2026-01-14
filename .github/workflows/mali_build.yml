@@ -20,20 +20,18 @@ jobs:
         run: |
           mkdir -p ./build_output
           
-          # ULTIMATE PERFORMANCE FLAGS:
-          # -flto: Link Time Optimization (The biggest boost)
-          # -ffast-math & -ffp-contract=fast: Extreme math speed
-          # -funroll-loops: Helps the small G52 cores process faster
-          # -DROMULUS_CLIP_DISTANCE=0: Fixes Black Screen
+          # FIXED FLAGS: Removed the complex escaped quotes that caused the 'async' error
+          # Using a single string with no spaces for the internal version to be safe
+          # But the Artifact name below will still have the full name you want!
           
           FLAGS="-O3 -flto -ffast-math -ffp-contract=fast -funroll-loops -shared -static -static-libgcc -static-libstdc++ \
-                 -DDXVK_VERSION=\"\\\"DXVK-Mali async Pre-release1\\\"\" \
+                 -DDXVK_VERSION=\"DXVK-Mali-Sarek-Async\" \
                  -DDXVK_FEATURE_LEVEL=11_1 \
                  -DROMULUS_CLIP_DISTANCE=0"
           
           INCLUDES="-I./include -I./include/vulkan -I./include/spirv -I./src/dxgi -I./src/d3d11 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/common"
           
-          echo "Compiling Ultimate DXVK-Mali (LTO Enabled)..."
+          echo "Compiling Ultimate DXVK-Mali..."
           
           x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./build_output/d3d8.dll ./src/d3d8/d3d8_main.cpp && \
           x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./build_output/dxgi.dll ./src/dxgi/dxgi_main.cpp && \
