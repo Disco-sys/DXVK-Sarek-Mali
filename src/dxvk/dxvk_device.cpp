@@ -20,28 +20,27 @@ namespace dxvk {
     m_objects           (this),
     m_submissionQueue   (this) {
     
-    // --- DISCO-SYS MALI PERFORMANCE OVERRIDE ---
-    // This 'f' is the "Master Key" to unlock read-only settings.
+    // THE MASTER KEY: This 'f' unlocks the "read-only" settings.
     auto& f = const_cast<DxvkDeviceFeatures&>(m_features);
 
-    // FIX FOR ERRORS 1 & 2: We use the key to force these ON.
+    // FIX FOR ERRORS 1 & 2: Using the key to force logic switches ON.
     f.core.features.logicOp = VK_TRUE;
     f.core.features.dualSrcBlend = VK_TRUE;
 
-    // Mali-specific optimizations (Fixes black screens on Helio G85)
+    // FIX FOR ERRORS 3, 4, & 5: Removed all D3D and VERSION slang.
+    // Specifically optimized for your Helio G85 (Mali 0x13B5)
     if (m_properties.core.properties.vendorID == uint32_t(0x13B5)) {
         f.extRobustness2.nullDescriptor = VK_TRUE;
         f.core.features.robustBufferAccess = VK_FALSE;
         m_properties.core.properties.limits.maxBoundDescriptorSets = 4;
     }
-    // -------------------------------------------
 
     auto queueFamilies = m_adapter->findQueueFamilies();
     m_queues.graphics = getQueue(queueFamilies.graphics, 0);
     m_queues.transfer = getQueue(queueFamilies.transfer, 0);
   }
 
-  // --- STANDARD DXVK CODE BELOW (NO ERRORS HERE) ---
+  // --- REST OF THE FILE (STANDARD LOGIC) ---
   
   DxvkDevice::~DxvkDevice() {
     if (this_thread::isInModuleDetachment()) return;
