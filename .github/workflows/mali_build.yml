@@ -1,4 +1,4 @@
-name: DXVK-Mali-G52-Ultimate-Final
+name: DXVK-Mali-G52-Ultimate-Fast
 on:
   push:
     branches: [main]
@@ -10,46 +10,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Install Fast Compiler (Clang & LLD)
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-mingw-w64-x86-64 patch
+          sudo apt-get install -y clang lld llvm mingw-w64 patch
 
       - name: Apply GPL-Async Patch
         run: |
-          # Downloading and applying the Async code directly to your files
           curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
           patch -p1 < gpl.patch || echo "Patch applied"
 
-      - name: Build Ultimate DLLs
+      - name: Fast Build (Clang + LLD)
         run: |
           mkdir -p ./build_output
           
-          # SMART FLAGS
-          # -O3 & -ffast-math: Speed
-          # -DROMULUS_CLIP_DISTANCE=0: Fixes Black Screen
-          # -DXVK_GPL_ASYNC=1: Enables the code we just patched in
-          FLAGS="-O3 -flto -ffast-math -shared -static -static-libgcc -static-libstdc++ -w \
+          # TURBO & FAST LINK FLAGS
+          # -fuse-ld=lld: Uses the super-fast linker
+          # -target: Tells Clang to cross-compile for Windows
+          FLAGS="-O3 -flto -ffast-math -fuse-ld=lld -shared -static -Wl,--subsystem,windows -target x86_64-w64-mingw32 \
                  -DDXVK_VERSION=\"DXVK-Mali-GPL-Async\" \
                  -DDXVK_FEATURE_LEVEL=11_1 \
                  -DROMULUS_CLIP_DISTANCE=0 \
                  -DXVK_GPL_ASYNC=1"
           
-          INCLUDES="-I./include -I./include/vulkan -I./include/spirv -I./src/dxgi -I./src/d3d11 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/common -I./src/vulkan"
+          # All paths the compiler needs to check
+          INCLUDES="-I./include -I./include/vulkan -I./src/dxgi -I./src/d3d11 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/common -I./src/vulkan"
           
-          # THE SMART LINK: We compile the logic parts into 'objects' so they don't conflict
-          echo "Compiling Core Engine..."
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -c ./src/util/*.cpp ./src/vulkan/*.cpp
+          echo "Fast Compiling Core Engine..."
+          clang++ $FLAGS $INCLUDES -c ./src/util/*.cpp ./src/vulkan/*.cpp ./src/common/*.cpp
           
-          echo "Building DLLs..."
-          # Now we link the main DLL files with the objects we just made
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/d3d8/d3d8_main.cpp -o ./build_output/d3d8.dll
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/dxgi/dxgi_main.cpp -o ./build_output/dxgi.dll
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/d3d11/d3d11_main.cpp ./src/dxvk/*.cpp -o ./build_output/d3d11.dll
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES *.o ./src/d3d9/d3d9_main.cpp -o ./build_output/d3d9.dll
+          echo "Fast Linking DLLs..."
+          clang++ $FLAGS $INCLUDES *.o ./src/d3d8/d3d8_main.cpp -o ./build_output/d3d8.dll
+          clang++ $FLAGS $INCLUDES *.o ./src/dxgi/dxgi_main.cpp -o ./build_output/dxgi.dll
+          clang++ $FLAGS $INCLUDES *.o ./src/d3d11/d3d11_main.cpp ./src/dxvk/*.cpp -o ./build_output/d3d11.dll
+          clang++ $FLAGS $INCLUDES *.o ./src/d3d9/d3d9_main.cpp -o ./build_output/d3d9.dll
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DXVK-Mali-GPL-Async-Ultimate
+          name: DXVK-Mali-GPL-Async-Fast
           path: ./build_output/
