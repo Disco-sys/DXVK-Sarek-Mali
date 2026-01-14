@@ -1,26 +1,25 @@
-name: Mali-G85-Universal-Build
-on: [push, pull_request]
+name: Mali-G85-Final-Build
+on: [push]
 
 jobs:
-  build_mali:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Build Tools
+      - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y meson mingw-w64 g++-mingw-w64-x86-64 glslang-tools
 
-      - name: Compile for Mali (Mingw-w64)
+      - name: Build Mali Driver
         run: |
-          # This builds ONLY the 64-bit DLLs you need for your phone
           meson setup --cross-file build-win64.txt --buildtype release --prefix /tmp/mali_out build.mali
           ninja -C build.mali install
 
-      - name: Upload Final DLLs
+      - name: Upload DLLs
         uses: actions/upload-artifact@v4
         with:
-          name: dxvk-mali-g85-v1
+          name: dxvk-mali-final
           path: /tmp/mali_out/bin/*.dll
