@@ -21,13 +21,12 @@ namespace dxvk {
     m_submissionQueue   (this) {
     
     // --- DISCO-SYS MALI PERFORMANCE OVERRIDE v1.0 ---
-    // Universal Fix: Check Vendor ID safely (0x13B5 is ARM/Mali)
-    // We cast to uint32_t to avoid compiler "type mismatch" errors
-    if (m_adapter->deviceProperties().core.properties.vendorID == uint32_t(0x13B5)) {
+    // Safe Check: Use 'm_properties' which is already loaded, and cast the ID to avoid errors.
+    if (m_properties.core.properties.vendorID == uint32_t(0x13B5)) {
         // 1. Fix Black Screen: Force nullDescriptor support
         m_features.extRobustness2.nullDescriptor = VK_TRUE;
 
-        // 2. Optimization: Disable CPU-heavy bounds checking on G85
+        // 2. Optimization: Disable CPU-heavy bounds checking
         m_features.core.features.robustBufferAccess = VK_FALSE;
 
         // 3. Descriptor Hack: Limit pool size to prevent Mali driver overhead
@@ -35,13 +34,12 @@ namespace dxvk {
     }
 
     // 4. Compatibility: Fake Features for DX11 Feature Level 11_1
-    // These are safe to enable on all mobile chips for better game support
     m_features.core.features.dualSrcBlend = VK_TRUE;
     m_features.core.features.logicOp = VK_TRUE;
     
     // 5. Geometry Hack: Prevent crash if tessellation is used heavily
     if (m_features.core.features.tessellationShader) {
-       // Kept enabled, but logic in dxvk_pipeline.cpp will limit usage
+       // Kept enabled, logic in pipeline will handle limits
     }
     // -------------------------------------------
 
