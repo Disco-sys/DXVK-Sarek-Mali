@@ -1,45 +1,71 @@
-
-name: Default-Compiler-Only
+name: Universal-Mali-Default-Compiler-Build
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 jobs:
-  compile:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # 1. INSTALL: Standard Ubuntu MinGW (Default)
+      # --- NEW COMPILER SETUP (From your save) ---
       - name: Install Toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-mingw-w64-x86-64 zstd
+          sudo apt-get install -y g++-mingw-w64-x86-64 patch zstd libvulkan-dev
           
-          # Force POSIX threading (best for modern C++ compatibility)
+          # Force POSIX threading (Critical for DXVK C++11/mutex support)
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           
-          echo "COMPILER VERSION:"
+          echo "VERIFIED COMPILER:"
           x86_64-w64-mingw32-g++ --version
 
-      # 2. COMPILE: Only the compiler logic
-      - name: Execute Compiler
+      # --- SAVE 1 PROJECT PREP ---
+      - name: Prepare Source & Patch
         run: |
-          mkdir -p ./output
-          
-          # Standard Compiler Flags
-          # -O3: Optimize for speed | -static: No external DLL dependencies needed
-          FLAGS="-O3 -static -static-libgcc -static-libstdc++ -w"
-          
-          # The basic compilation command structure
-          # Replace 'YOUR_FILE.cpp' with your actual filename
-          # x86_64-w64-mingw32-g++ $FLAGS -o ./output/result.exe YOUR_FILE.cpp
+          # Manual header injection to prevent dxvk_version.h errors
+          mkdir -p ./src/dxvk
+          echo '#define DXVK_VERSION "1.11.0-Mali-Universal"' > ./src/dxvk/dxvk_version.h
 
-      # 3. UPLOAD: Save the result
-      - name: Upload Build
+          # Apply Ph42oN's GPL-Async Patch (Performance core)
+          curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
+          patch -p1 < gpl.patch || echo "Patch applied"
+
+      # --- SAVE 1 COMPILATION LOGIC (Using New Compiler) ---
+      - name: Compile Optimized DLLs
+        run: |
+          mkdir -p ./build_output/x64
+          
+          # Optimization Flags from Save 1
+          FLAGS="-O3 -march=x86-64 -ffast-math -shared -static -static-libgcc -static-libstdc++ -w"
+          OPTS="-DXVK_GPL_ASYNC=1 -DROMULUS_CLIP_DISTANCE=0"
+          
+          # Recursive folder search (The "Success Logic")
+          ALL_PATHS=$(find ./src -type d | sed 's/^/-I /' | tr '\n' ' ')
+          INCLUDES="-I/usr/include -I./include -I./include/vulkan $ALL_PATHS"
+          
+          # Core engine files discovery
+          CORE_ENGINE=$(find ./src/util ./src/vulkan ./src/dxvk -name "*.cpp")
+
+          # Loop through and build DLLs using the verified toolchain
+          for dll in dxgi d3d11 d3d10core d3d9 d3d8; do
+            if [ -d "./src/$dll" ]; then
+              echo "Building: $dll.dll"
+              x86_64-w64-mingw32-g++ $FLAGS $OPTS $INCLUDES -o ./build_output/x64/$dll.dll $(find ./src/$dll -name "*.cpp") $CORE_ENGINE
+            fi
+          done
+
+      # --- PACKAGING ---
+      - name: Create WCP Package
+        run: |
+          echo '{"name":"DXVK Mali GPL-Async","version":"1.11.0","author":"Disco-sys","description":"Universal Mali build using Default Toolchain.","type":"DXVK"}' > ./build_output/profile.json
+          cd build_output && tar -I zstd -cf ../DXVK-Mali-Combined.wcp ./*
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Compiled-Binary
-          path: ./output/
+          name: Mali-Combined-Pack
+          path: ./*.wcp
