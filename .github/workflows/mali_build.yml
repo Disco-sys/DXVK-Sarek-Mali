@@ -1,4 +1,4 @@
-name: DXVK-Mali-WCP-Final
+name: Universal-Mali-Fast-Build
 on:
   push:
     branches: [main]
@@ -10,39 +10,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Setup Compiler (Ubuntu)
         run: |
           sudo apt-get update
           sudo apt-get install -y g++-mingw-w64-x86-64 patch zstd
 
-      - name: Apply Mali GPL-Async
+      - name: Fast Compile & Package
         run: |
+          # 1. DIRECTORY SETUP
+          mkdir -p ./wcp_1110/x64
+          mkdir -p ./wcp_1103/x64
+
+          # 2. APPLY MALI GPL-ASYNC PATCH
           curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
           patch -p1 < gpl.patch || echo "Applied"
 
-      - name: Build and Package
-        run: |
-          mkdir -p ./wcp_staging/x64
-          
-          # Performance & GPL Flags
+          # 3. COMPILER SETTINGS (Speed & Mali G52 Focus)
+          # -O3 + -flto = Maximum Speed
           FLAGS="-O3 -flto -ffast-math -shared -static -static-libgcc -static-libstdc++ -w -DROMULUS_CLIP_DISTANCE=0 -DXVK_GPL_ASYNC=1"
           INCLUDES="-I./include -I./include/vulkan -I./src/dxgi -I./src/d3d11 -I./src/d3d10 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/vulkan"
           
-          # Core Engine Logic
-          CORE=$(find ./src/util ./src/vulkan ./src/common ./src/dxvk -maxdepth 2 -name "*.cpp")
+          # 4. THE "SMART GUIDE" (Finds the code logic automatically)
+          CORE_ENGINE=$(find ./src/util ./src/vulkan ./src/dxvk -maxdepth 2 -name "*.cpp" 2>/dev/null)
 
-          # Compiling DLLs one by one to prevent server crash
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./wcp_staging/x64/dxgi.dll ./src/dxgi/*.cpp $CORE
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./wcp_staging/x64/d3d11.dll ./src/d3d11/*.cpp $CORE
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./wcp_staging/x64/d3d9.dll ./src/d3d9/*.cpp $CORE
-          x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./wcp_staging/x64/d3d8.dll ./src/d3d8/*.cpp $CORE
+          # 5. EASY COMPILATION (Building the 1.11.0 Set)
+          echo "Building Universal Mali 1.11.0..."
+          for dll in dxgi d3d11 d3d10core d3d9 d3d8; do
+            if [ -d "./src/$dll" ]; then
+              x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./wcp_1110/x64/$dll.dll ./src/$dll/*.cpp $CORE_ENGINE
+            fi
+          done
 
-          # Final .WCP packaging for Ludashi/Winlator
-          cd wcp_staging
-          tar -I zstd -cf ../DXVK_Mali_Universal.wcp ./*
+          # 6. GENERATE MANIFESTS (.profile.json)
+          echo '{"name":"DXVK Mali 1.11.0","version":"1.11.0","description":"Universal Mali build with GPL-Async and Performance fixes.","type":"DXVK"}' > ./wcp_1110/profile.json
+          echo '{"name":"DXVK-Mali 1.10.3","version":"1.10.3","description":"Fix for 1.11.0, use this if 32-bit fails. Includes GPL/Async optimizations.","type":"DXVK"}' > ./wcp_1103/profile.json
 
-      - name: Upload .wcp
+          # 7. DOWNLOAD LEGACY 1.10.3 ASYNC
+          curl -L https://github.com/Sporif/dxvk-async/releases/download/1.10.3/dxvk-async-1.10.3.tar.gz -o 1103.tar.gz
+          tar -xf 1103.tar.gz
+          cp dxvk-async-1.10.3/x64/*.dll ./wcp_1103/x64/
+
+          # 8. FINAL PACKAGING (.wcp for Ludashi)
+          cd wcp_1110 && tar -I zstd -cf ../DXVK-Mali-1.11.0.wcp ./* && cd ..
+          cd wcp_1103 && tar -I zstd -cf ../DXVK-Mali-1.10.3.wcp ./* && cd ..
+
+      - name: Upload Universal WCPs
         uses: actions/upload-artifact@v4
         with:
-          name: DXVK-Mali-WCP
+          name: Universal-Mali-DXVK-Pack
           path: ./*.wcp
