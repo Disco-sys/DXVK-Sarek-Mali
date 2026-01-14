@@ -1,1 +1,45 @@
 
+name: Default-Compiler-Only
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. INSTALL: Standard Ubuntu MinGW (Default)
+      - name: Install Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-mingw-w64-x86-64 zstd
+          
+          # Force POSIX threading (best for modern C++ compatibility)
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          
+          echo "COMPILER VERSION:"
+          x86_64-w64-mingw32-g++ --version
+
+      # 2. COMPILE: Only the compiler logic
+      - name: Execute Compiler
+        run: |
+          mkdir -p ./output
+          
+          # Standard Compiler Flags
+          # -O3: Optimize for speed | -static: No external DLL dependencies needed
+          FLAGS="-O3 -static -static-libgcc -static-libstdc++ -w"
+          
+          # The basic compilation command structure
+          # Replace 'YOUR_FILE.cpp' with your actual filename
+          # x86_64-w64-mingw32-g++ $FLAGS -o ./output/result.exe YOUR_FILE.cpp
+
+      # 3. UPLOAD: Save the result
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compiled-Binary
+          path: ./output/
