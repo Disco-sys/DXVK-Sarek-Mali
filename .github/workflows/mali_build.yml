@@ -1,4 +1,4 @@
-name: Universal-Mali-Fast-Build
+name: Universal-Mali-AutoSearch-Build
 on:
   push:
     branches: [main]
@@ -10,54 +10,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- STEP 1: INSTALL NECESSARY TOOLS AND COMPONENTS ---
+      # --- STEP 1: INSTALL TOOLS ---
       - name: Install Build Environment
         run: |
           sudo apt-get update
-          # Standard compiler + Patch tool + Zstd for WCP + Vulkan Headers
           sudo apt-get install -y g++-mingw-w64-x86-64 patch zstd libvulkan-dev
 
-      # --- STEP 2: COMPILE AND PACKAGING ---
+      # --- STEP 2: COMPILE WITH RECURSIVE SEARCH ---
       - name: Execute Universal Mali Build
         run: |
-          # A. Prepare Workspace
           mkdir -p ./pack_1110/x64
           mkdir -p ./pack_1103/x64
 
-          # B. Apply Universal Mali Fixes (GPL-Async)
+          # Apply Performance Patch
           curl -L https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/master/patches/dxvk-gplasync-2.7.1.patch -o gpl.patch
-          patch -p1 < gpl.patch || echo "Applied with offsets"
+          patch -p1 < gpl.patch || echo "Applied"
 
-          # C. Set Easy Compiler Guided Paths
+          # SETTINGS: O3 (Fastest), flto (Smart Link), Static (No dependencies)
           FLAGS="-O3 -flto -ffast-math -shared -static -static-libgcc -static-libstdc++ -w -DROMULUS_CLIP_DISTANCE=0 -DXVK_GPL_ASYNC=1"
-          INCLUDES="-I/usr/include -I./include -I./include/vulkan -I./src/dxgi -I./src/d3d11 -I./src/d3d10 -I./src/d3d9 -I./src/d3d8 -I./src/util -I./src/dxvk -I./src/vulkan"
           
-          # D. Guide Compiler to Core Logic
-          CORE_ENGINE=$(find ./src/util ./src/vulkan ./src/dxvk -maxdepth 2 -name "*.cpp" 2>/dev/null)
+          # RECURSIVE INCLUDE SEARCH: This tells the compiler to search EVERY subfolder for headers
+          # We generate a list of all directories and prefix them with -I
+          SMART_INCLUDES=$(find ./src -type d | sed 's/^/-I /' | tr '\n' ' ')
+          VULKAN_INCLUDE="-I/usr/include -I./include -I./include/vulkan"
+          
+          # RECURSIVE SOURCE SEARCH: Automatically find every .cpp file in the core engine
+          CORE_ENGINE=$(find ./src/util ./src/vulkan ./src/dxvk -name "*.cpp")
 
-          # E. Directly Compile DLLs
+          # DIRECT COMPILATION (Building DLLs)
           for dll in dxgi d3d11 d3d10core d3d9 d3d8; do
             if [ -d "./src/$dll" ]; then
-              echo "Compiling $dll.dll..."
-              x86_64-w64-mingw32-g++ $FLAGS $INCLUDES -o ./pack_1110/x64/$dll.dll ./src/$dll/*.cpp $CORE_ENGINE
+              echo "Searching and Compiling $dll..."
+              # find ./src/$dll -name "*.cpp" searches all subfolders of that DLL
+              x86_64-w64-mingw32-g++ $FLAGS $VULKAN_INCLUDE $SMART_INCLUDES -o ./pack_1110/x64/$dll.dll $(find ./src/$dll -name "*.cpp") $CORE_ENGINE
             fi
           done
 
-          # F. Generate Ludashi Identity (profile.json)
-          echo '{"name":"DXVK Mali 1.11.0","version":"1.11.0","author":"Disco-sys","description":"Universal Mali build with GPL-Async and Performance fixes.","type":"DXVK"}' > ./pack_1110/profile.json
-          echo '{"name":"DXVK-Mali 1.10.3","version":"1.10.3","author":"Disco-sys","description":"Fix for 1.11.0, use this if 32-bit fails. Includes GPL/Async optimizations.","type":"DXVK"}' > ./pack_1103/profile.json
+          # --- LUDASHI PACKAGING ---
+          echo '{"name":"DXVK Mali 1.11.0","version":"1.11.0","author":"Disco-sys","description":"Universal Mali build.","type":"DXVK"}' > ./pack_1110/profile.json
+          echo '{"name":"DXVK-Mali 1.10.3","version":"1.10.3","author":"Disco-sys","description":"Fix for 1.11.0 issues.","type":"DXVK"}' > ./pack_1103/profile.json
 
-          # G. Prepare 1.10.3 Legacy fallback
           curl -L https://github.com/Sporif/dxvk-async/releases/download/1.10.3/dxvk-async-1.10.3.tar.gz -o 1103.tar.gz
           tar -xf 1103.tar.gz
           cp dxvk-async-1.10.3/x64/*.dll ./pack_1103/x64/
 
-          # H. Final Package Creation
           cd pack_1110 && tar -I zstd -cf ../DXVK-Mali-1.11.0.wcp ./* && cd ..
           cd pack_1103 && tar -I zstd -cf ../DXVK-Mali-1.10.3.wcp ./* && cd ..
 
-      # --- STEP 3: FINAL UPLOAD ---
-      - name: Upload WCP Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Universal-Mali-DXVK-Pack
