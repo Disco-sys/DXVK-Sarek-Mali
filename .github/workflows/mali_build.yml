@@ -1,35 +1,30 @@
 name: Artifacts (Package)
-
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
   artifacts-mingw-w64:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
-      id: checkout-code
       uses: actions/checkout@v4
       with:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Setup problem matcher
-      uses: Joshua-Ashton/gcc-problem-matcher@v3
+    - name: Build Fixes
+      run: |
+        mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "1.11.0"' > ./src/dxvk/dxvk_version.h
+        chmod +x package-release.sh
 
     - name: Build release
-      id: build-release
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
-          export VERSION_NAME="${GITHUB_REF##*/}-${GITHUB_SHA##*/}"
-          ./package-release.sh ${VERSION_NAME} build --no-package
-          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+          ./package-release.sh master build --no-package
 
     - name: Upload artifacts
-      id: upload-artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: dxvk-sarek-${{ env.VERSION_NAME }}
-        path: build/dxvk-${{ env.VERSION_NAME }}
+        name: dxvk-mali-build
+        path: build/dxvk-master
         if-no-files-found: error
