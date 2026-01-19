@@ -23,14 +23,15 @@ jobs:
       with:
         command: |
           # --- THE CRITICAL FIXES ---
-          # 1. Inject the generator AFTER the project() line (Line 2)
-          sed -i "2i wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])" meson.build
+          # 1. Inject missing variables AFTER the project() line (Line 2)
+          # We define wrc_generator AND dll_ext (set to '.dll')
+          sed -i "2i wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])\ndll_ext = '.dll'" meson.build
           
           # 2. Fix the version header required by Sarek scripts
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "1.11.0"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
 
-          # Set a clean version name to ensure predictable folder paths
+          # Set a clean version name
           export VERSION_NAME="master"
           ./package-release.sh ${VERSION_NAME} build --no-package
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
