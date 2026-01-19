@@ -22,16 +22,19 @@ jobs:
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
-          # --- THE CRITICAL FIXES ---
-          # 1. Inject missing variables AFTER the project() line (Line 2)
-          # We define wrc_generator AND dll_ext (set to '.dll')
-          sed -i "2i wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])\ndll_ext = '.dll'" meson.build
+          # --- THE FINAL VARIABLE FIXES ---
+          # We inject all three missing Mali-specific variables at once:
+          # 1. wrc_generator (Resource files)
+          # 2. dll_ext (Standard .dll extension)
+          # 3. def_spec_ext (Standard .def extension)
           
-          # 2. Fix the version header required by Sarek scripts
+          sed -i "2i wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])\ndll_ext = '.dll'\ndef_spec_ext = '.def'" meson.build
+          
+          # Fix version header and script permissions
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "1.11.0"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
 
-          # Set a clean version name
+          # Set clean version and run build
           export VERSION_NAME="master"
           ./package-release.sh ${VERSION_NAME} build --no-package
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
