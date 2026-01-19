@@ -22,19 +22,21 @@ jobs:
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
-          # --- THE COMPREHENSIVE MALI VARIABLE PATCH ---
-          # We define everything the Mali fork expects in the global Meson scope:
-          # 1. Resource Generator (wrc_generator)
-          # 2. Extensions (dll_ext, def_spec_ext)
-          # 3. Dependency Links (lib_dxgi)
+          # --- THE MASTER MALI VARIABLE PATCH ---
+          # This defines EVERYTHING to prevent the one-by-one error cycle:
+          # 1. Generators & Extensions
+          # 2. Cross-Library Links (lib_dxgi, lib_d3d11, lib_d3d9)
           
-          FIX_CMD="wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])\n"
-          FIX_CMD+="dll_ext = '.dll'\n"
-          FIX_CMD+="def_spec_ext = '.def'\n"
-          FIX_CMD+="lib_dxgi = declare_dependency(link_args: ['-ldxgi'])"
+          PATCH_CODE="wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])\n"
+          PATCH_CODE+="dll_ext = '.dll'\n"
+          PATCH_CODE+="def_spec_ext = '.def'\n"
+          PATCH_CODE+="lib_dxgi = declare_dependency(link_args: ['-ldxgi'])\n"
+          PATCH_CODE+="lib_d3d11 = declare_dependency(link_args: ['-ld3d11'])\n"
+          PATCH_CODE+="lib_d3d10core = declare_dependency(link_args: ['-ld3d10core'])\n"
+          PATCH_CODE+="lib_d3d9 = declare_dependency(link_args: ['-ld3d9'])"
           
-          # Inject after the project() line
-          sed -i "2i $FIX_CMD" meson.build
+          # Inject all at once after the project() line
+          sed -i "2i $PATCH_CODE" meson.build
           
           # Fix version header and script permissions
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "1.11.0"' > ./src/dxvk/dxvk_version.h
