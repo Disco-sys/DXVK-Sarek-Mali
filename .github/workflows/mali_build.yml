@@ -1,4 +1,18 @@
-    - name: Compiler (LLVM-Clang Full Patch)
+name: Build and Upload
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  mali-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Compiler (LLVM-Clang Pro)
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
@@ -9,16 +23,11 @@
           cp -r include/vulkan /usr/x86_64-w64-mingw32/include/
           cp -r include/spirv /usr/x86_64-w64-mingw32/include/
 
-          # 3. COMPREHENSIVE MALI PATCH (Fixes d3d8, d3d9, d3d10, d3d11, dxgi)
+          # 3. COMPREHENSIVE MALI PATCH (Fixes d3d8, d3d9, d3d10, d3d11)
           cat <<EOF > mali_patch.txt
-          # Resource compiler for Windows
           wrc_generator = generator(find_program('x86_64-w64-mingw32-windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])
-          
-          # File extensions
           dll_ext = '.dll'
           def_spec_ext = '.def'
-          
-          # Library Dependencies (Fixes the "Unknown variable" errors)
           lib_dxgi = declare_dependency(link_args: ['-ldxgi'])
           lib_d3d9 = declare_dependency(link_args: ['-ld3d9'])
           lib_d3d10 = declare_dependency(link_args: ['-ld3d10'])
@@ -26,10 +35,10 @@
           lib_d3d11 = declare_dependency(link_args: ['-ld3d11'])
           EOF
           
-          # Inject the variables into the top of the main meson.build
+          # Inject variables into the top of the main meson.build
           sed -i '1r mali_patch.txt' meson.build
           
-          # 4. Use LLVM Compiler
+          # 4. Use LLVM Compiler for Win64
           export CC="clang --target=x86_64-w64-mingw32"
           export CXX="clang++ --target=x86_64-w64-mingw32"
           export LDFLAGS="-fuse-ld=lld"
@@ -38,3 +47,9 @@
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "Mali-LLVM-Pro"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
           ./package-release.sh master build --no-package
+
+    - name: Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dxvk-mali-pro-llvm
+        path: build/dxvk-master
