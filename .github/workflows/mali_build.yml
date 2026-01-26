@@ -1,31 +1,22 @@
-name: Build and Upload
-
-on: [push, pull_request, workflow_dispatch]
-
-jobs:
-  mali-build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Compiler (LLVM-Clang Pro)
+    - name: Compiler (LLVM-Clang + Header Inject)
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
-          # 1. Install Toolchain
-          sudo pacman -S --noconfirm mingw-w64-gcc clang lld
+          # 1. Install Toolchain & Git
+          sudo pacman -S --noconfirm mingw-w64-gcc clang lld git
 
-          # 2. Fix Mandatory Headers
-          sudo mkdir -p /usr/x86_64-w64-mingw32/include/vulkan
-          sudo cp -r include/vulkan/* /usr/x86_64-w64-mingw32/include/vulkan/
-          sudo mkdir -p /usr/x86_64-w64-mingw32/include/spirv
-          sudo cp -r include/spirv/* /usr/x86_64-w64-mingw32/include/spirv/
+          # 2. Download the missing Vulkan and SPIRV headers
+          # We clone them into a temporary folder 'deps'
+          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git v_headers
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git s_headers
+          
+          # 3. Create the missing include structure
+          mkdir -p include/vulkan
+          mkdir -p include/spirv
+          cp -r v_headers/include/vulkan/* include/vulkan/
+          cp -r s_headers/include/spirv/* include/spirv/
 
-          # 3. COMPREHENSIVE MALI PATCH (Fixes d3d8, d3d9, d3d10, d3d11)
+          # 4. COMPREHENSIVE MALI PATCH (All variables)
           cat <<EOF > mali_patch.txt
           wrc_generator = generator(find_program('x86_64-w64-mingw32-windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])
           dll_ext = '.dll'
@@ -36,22 +27,15 @@ jobs:
           lib_d3d10core = declare_dependency(link_args: ['-ld3d10core'])
           lib_d3d11 = declare_dependency(link_args: ['-ld3d11'])
           EOF
-          
-          # Inject variables into the top of the main meson.build
           sed -i '1r mali_patch.txt' meson.build
           
-          # 4. Use LLVM Compiler with pathing
-          export CC="clang --target=x86_64-w64-mingw32 -I${GITHUB_WORKSPACE}/include"
-          export CXX="clang++ --target=x86_64-w64-mingw32 -I${GITHUB_WORKSPACE}/include"
+          # 5. Build with the LLVM compiler pointing to our new headers
+          # We use -I$(pwd)/include to tell Clang exactly where we put the files
+          export CC="clang --target=x86_64-w64-mingw32 -I$(pwd)/include"
+          export CXX="clang++ --target=x86_64-w64-mingw32 -I$(pwd)/include"
           export LDFLAGS="-fuse-ld=lld"
 
-          # 5. Build
+          # 6. Execute Build
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "Mali-LLVM-Pro"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
           ./package-release.sh master build --no-package
-
-    - name: Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dxvk-mali-pro-llvm
-        path: build/dxvk-master
