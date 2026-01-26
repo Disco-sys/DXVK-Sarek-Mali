@@ -16,16 +16,17 @@ jobs:
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
-          # 1. Install LLVM
-          sudo pacman -S --noconfirm mingw-w64-x86_64-clang
+          # 1. Install the base MinGW toolchain and standard Clang
+          # On Arch, 'clang' can target anything if you give it the right 'triple'
+          sudo pacman -S --noconfirm mingw-w64-gcc clang lld
 
           # 2. Fix Mandatory Headers
           cp -r include/vulkan /usr/x86_64-w64-mingw32/include/
           cp -r include/spirv /usr/x86_64-w64-mingw32/include/
 
-          # 3. Patch Variables
+          # 3. Patch Variables (Required for Mali source)
           cat <<EOF > mali_patch.txt
-          wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])
+          wrc_generator = generator(find_program('x86_64-w64-mingw32-windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])
           dll_ext = '.dll'
           def_spec_ext = '.def'
           lib_dxgi = declare_dependency(link_args: ['-ldxgi'])
@@ -33,17 +34,19 @@ jobs:
           EOF
           sed -i '1r mali_patch.txt' meson.build
           
-          # 4. Use LLVM Compiler
-          export CC="clang"
-          export CXX="clang++"
+          # 4. Force LLVM/Clang to target Windows x64
+          # We use the 'target' flag so Clang behaves like a MinGW compiler
+          export CC="clang --target=x86_64-w64-mingw32"
+          export CXX="clang++ --target=x86_64-w64-mingw32"
+          export LDFLAGS="-fuse-ld=lld"
 
           # 5. Build
-          mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "Mali-LLVM"' > ./src/dxvk/dxvk_version.h
+          mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "Mali-LLVM-Pro"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
           ./package-release.sh master build --no-package
 
     - name: Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: dxvk-mali-pro
+        name: dxvk-mali-pro-llvm
         path: build/dxvk-master
