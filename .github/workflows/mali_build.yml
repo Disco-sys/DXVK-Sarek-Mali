@@ -1,29 +1,18 @@
-name: Build and Upload
-
-on: [push, pull_request, workflow_dispatch]
-
-jobs:
-  mali-build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Compiler (LLVM-Clang Pro)
+    - name: Compiler (LLVM-Clang Final)
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
           # 1. Install Toolchain
           sudo pacman -S --noconfirm mingw-w64-gcc clang lld
 
-          # 2. Fix Mandatory Headers
-          cp -r include/vulkan /usr/x86_64-w64-mingw32/include/
-          cp -r include/spirv /usr/x86_64-w64-mingw32/include/
+          # 2. BRIDGING HEADERS (The Final Piece)
+          # We copy headers to the exact spot where MinGW-Clang expects them
+          sudo mkdir -p /usr/x86_64-w64-mingw32/include/vulkan
+          sudo cp -r include/vulkan/* /usr/x86_64-w64-mingw32/include/vulkan/
+          sudo mkdir -p /usr/x86_64-w64-mingw32/include/spirv
+          sudo cp -r include/spirv/* /usr/x86_64-w64-mingw32/include/spirv/
 
-          # 3. COMPREHENSIVE MALI PATCH (Fixes d3d8, d3d9, d3d10, d3d11)
+          # 3. COMPREHENSIVE MALI PATCH
           cat <<EOF > mali_patch.txt
           wrc_generator = generator(find_program('x86_64-w64-mingw32-windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])
           dll_ext = '.dll'
@@ -34,22 +23,15 @@ jobs:
           lib_d3d10core = declare_dependency(link_args: ['-ld3d10core'])
           lib_d3d11 = declare_dependency(link_args: ['-ld3d11'])
           EOF
-          
-          # Inject variables into the top of the main meson.build
           sed -i '1r mali_patch.txt' meson.build
           
-          # 4. Use LLVM Compiler for Win64
-          export CC="clang --target=x86_64-w64-mingw32"
-          export CXX="clang++ --target=x86_64-w64-mingw32"
+          # 4. Use LLVM Compiler with include-path injection
+          # We add -I to the CC/CXX commands so it definitely finds the headers
+          export CC="clang --target=x86_64-w64-mingw32 -I${GITHUB_WORKSPACE}/include"
+          export CXX="clang++ --target=x86_64-w64-mingw32 -I${GITHUB_WORKSPACE}/include"
           export LDFLAGS="-fuse-ld=lld"
 
           # 5. Build
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "Mali-LLVM-Pro"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
           ./package-release.sh master build --no-package
-
-    - name: Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dxvk-mali-pro-llvm
-        path: build/dxvk-master
