@@ -1,15 +1,29 @@
+name: Build and Upload
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  mali-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
     - name: Compiler (LLVM-Clang Only)
       uses: Joshua-Ashton/arch-mingw-github-action@v8
       with:
         command: |
-          # 1. Install Clang
+          # 1. Install LLVM
           sudo pacman -S --noconfirm mingw-w64-x86_64-clang
 
-          # 2. Fix Mandatory Headers (Build will fail without these)
+          # 2. Fix Mandatory Headers
           cp -r include/vulkan /usr/x86_64-w64-mingw32/include/
           cp -r include/spirv /usr/x86_64-w64-mingw32/include/
 
-          # 3. Patch Variables (Required for Mali source code)
+          # 3. Patch Variables
           cat <<EOF > mali_patch.txt
           wrc_generator = generator(find_program('windres'), output: '@BASENAME@.res', arguments: [ '@INPUT@', '@OUTPUT@' ])
           dll_ext = '.dll'
@@ -27,3 +41,9 @@
           mkdir -p ./src/dxvk && echo '#define DXVK_VERSION "Mali-LLVM"' > ./src/dxvk/dxvk_version.h
           chmod +x package-release.sh
           ./package-release.sh master build --no-package
+
+    - name: Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dxvk-mali-pro
+        path: build/dxvk-master
